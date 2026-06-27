@@ -1,0 +1,51 @@
+//@version=5
+// NOTA: commission_value y slippage deben ser constantes (Pine no permite input() aquí).
+// Edita estos dos números directamente si tu bróker tiene otra comisión/slippage típico.
+strategy("Estrategia E - Hull MA + ROC (M15)", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2)
+
+// === Preset de periodos para M15 ===
+presetMode = input.string("Estándar (sin cambio)", "Modo de periodos", options=["Estándar (sin cambio)", "Ventana equivalente"], group="Preset M15")
+hmaLen     = presetMode == "Estándar (sin cambio)" ? 20 : 14
+rocLen     = presetMode == "Estándar (sin cambio)" ? 10 : 7
+
+// === Filtro de sesión horaria ===
+sessionInput = input.session("0000-2400", "Sesión de trading (hora del exchange)", group="Filtro de Sesión")
+inSession    = not na(time(timeframe.period, sessionInput))
+
+// === Indicadores ===
+hma = ta.hma(close, hmaLen)
+roc = ta.roc(close, rocLen)
+
+hmaTurnUp   = hma > hma[1] and hma[1] <= hma[2]
+hmaTurnDown = hma < hma[1] and hma[1] >= hma[2]
+
+rocCrossUp   = ta.crossover(roc, 0)
+rocCrossDown = ta.crossunder(roc, 0)
+
+longCondition  = hmaTurnUp   and rocCrossUp   and inSession
+shortCondition = hmaTurnDown and rocCrossDown and inSession
+
+// === Plots ===
+plot(hma, "HMA", color=color.blue, linewidth=2)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: cuando la HMA vuelve a girar en contra ===
+if hmaTurnDown
+    strategy.close("Long")
+if hmaTurnUp
+    strategy.close("Short")
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia E", message="HMA + ROC: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia E", message="HMA + ROC: señal de VENTA")

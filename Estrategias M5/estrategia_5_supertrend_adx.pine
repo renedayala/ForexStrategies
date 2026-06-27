@@ -1,0 +1,56 @@
+//@version=5
+strategy("Estrategia 5 - Supertrend + ADX (M5)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=1)
+
+// === Inputs ===
+atrPeriod    = input.int(10, "Supertrend ATR Periodo")
+factor       = input.float(3.0, "Supertrend Factor")
+adxLen       = input.int(14, "ADX Periodo")
+adxThreshold = input.int(25, "ADX Umbral mínimo de fuerza")
+
+// === Supertrend ===
+[supertrend, direction] = ta.supertrend(factor, atrPeriod)
+// direction: -1 = tendencia alcista, 1 = tendencia bajista
+
+// === ADX (DMI manual) ===
+dirmove(len) =>
+    up = ta.change(high)
+    down = -ta.change(low)
+    plusDM = (up > down and up > 0) ? up : 0.0
+    minusDM = (down > up and down > 0) ? down : 0.0
+    trur = ta.rma(ta.tr, len)
+    plusDI = 100 * ta.rma(plusDM, len) / trur
+    minusDI = 100 * ta.rma(minusDM, len) / trur
+    [plusDI, minusDI]
+
+[plusDI, minusDI] = dirmove(adxLen)
+adxValue = 100 * ta.rma(math.abs(plusDI - minusDI) / (plusDI + minusDI), adxLen)
+
+// === Condiciones ===
+bullishFlip = ta.change(direction) < 0
+bearishFlip = ta.change(direction) > 0
+
+longCondition  = bullishFlip and adxValue > adxThreshold
+shortCondition = bearishFlip and adxValue > adxThreshold
+
+// === Plots ===
+plot(direction < 0 ? supertrend : na, "Supertrend Alcista", color=color.green, style=plot.style_linebr)
+plot(direction > 0 ? supertrend : na, "Supertrend Bajista", color=color.red, style=plot.style_linebr)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: trailing stop con el propio Supertrend ===
+if strategy.position_size > 0
+    strategy.exit("Trail Long", "Long", stop=supertrend)
+if strategy.position_size < 0
+    strategy.exit("Trail Short", "Short", stop=supertrend)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia 5", message="Supertrend + ADX: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia 5", message="Supertrend + ADX: señal de VENTA")

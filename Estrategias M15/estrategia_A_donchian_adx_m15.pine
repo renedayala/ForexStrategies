@@ -1,0 +1,67 @@
+//@version=5
+// NOTA: commission_value y slippage deben ser constantes (Pine no permite input() aquí).
+// Edita estos dos números directamente si tu bróker tiene otra comisión/slippage típico.
+strategy("Estrategia A - Donchian + ADX (M15)", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2)
+
+// === Preset de periodos para M15 ===
+presetMode   = input.string("Estándar (sin cambio)", "Modo de periodos", options=["Estándar (sin cambio)", "Ventana equivalente"], group="Preset M15")
+donchianLen  = presetMode == "Estándar (sin cambio)" ? 20 : 14
+adxLen       = presetMode == "Estándar (sin cambio)" ? 14 : 10
+adxThreshold = input.int(25, "ADX Umbral mínimo de fuerza", group="Indicadores")
+
+// === Filtro de sesión horaria ===
+sessionInput = input.session("0000-2400", "Sesión de trading (hora del exchange)", group="Filtro de Sesión")
+inSession    = not na(time(timeframe.period, sessionInput))
+
+// === Donchian Channel ===
+upperDonchian = ta.highest(high, donchianLen)
+lowerDonchian = ta.lowest(low, donchianLen)
+midDonchian   = math.avg(upperDonchian, lowerDonchian)
+
+// === ADX (DMI manual) ===
+dirmove(len) =>
+    up = ta.change(high)
+    down = -ta.change(low)
+    plusDM = (up > down and up > 0) ? up : 0.0
+    minusDM = (down > up and down > 0) ? down : 0.0
+    trur = ta.rma(ta.tr, len)
+    plusDI = 100 * ta.rma(plusDM, len) / trur
+    minusDI = 100 * ta.rma(minusDM, len) / trur
+    [plusDI, minusDI]
+
+[plusDI, minusDI] = dirmove(adxLen)
+adxValue = 100 * ta.rma(math.abs(plusDI - minusDI) / (plusDI + minusDI), adxLen)
+
+// === Condiciones (ruptura contra el canal de la vela anterior) ===
+breakUp   = ta.crossover(close, upperDonchian[1])
+breakDown = ta.crossunder(close, lowerDonchian[1])
+
+longCondition  = breakUp   and adxValue > adxThreshold and inSession
+shortCondition = breakDown and adxValue > adxThreshold and inSession
+
+// === Plots ===
+plot(upperDonchian, "Donchian Superior", color=color.red)
+plot(lowerDonchian, "Donchian Inferior", color=color.green)
+plot(midDonchian, "Donchian Media", color=color.gray)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: trailing en la media del canal ===
+if strategy.position_size > 0
+    strategy.exit("Trail Long", "Long", stop=midDonchian)
+if strategy.position_size < 0
+    strategy.exit("Trail Short", "Short", stop=midDonchian)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia A", message="Donchian + ADX: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia A", message="Donchian + ADX: señal de VENTA")

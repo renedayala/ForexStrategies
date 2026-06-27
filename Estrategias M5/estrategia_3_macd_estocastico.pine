@@ -1,0 +1,55 @@
+//@version=5
+strategy("Estrategia 3 - MACD + Estocástico (M5)", overlay=false, default_qty_type=strategy.percent_of_equity, default_qty_value=1)
+
+// === Inputs ===
+fastLen = input.int(12, "MACD Rápida")
+slowLen = input.int(26, "MACD Lenta")
+sigLen  = input.int(9, "MACD Señal")
+
+kLen    = input.int(14, "Estocástico %K Periodo")
+kSmooth = input.int(3, "Estocástico Suavizado %K")
+dLen    = input.int(3, "Estocástico %D")
+
+// === MACD ===
+[macdLine, signalLine, histLine] = ta.macd(close, fastLen, slowLen, sigLen)
+
+// === Estocástico ===
+k = ta.sma(ta.stoch(close, high, low, kLen), kSmooth)
+d = ta.sma(k, dLen)
+
+// === Condiciones ===
+macdCrossUp   = ta.crossover(macdLine, signalLine)
+macdCrossDown = ta.crossunder(macdLine, signalLine)
+
+stochCrossUpFromOversold     = ta.crossover(k, d) and k[1] < 20
+stochCrossDownFromOverbought = ta.crossunder(k, d) and k[1] > 80
+
+longCondition  = macdCrossUp   and stochCrossUpFromOversold
+shortCondition = macdCrossDown and stochCrossDownFromOverbought
+
+// === Plots ===
+plot(macdLine, "MACD", color=color.blue)
+plot(signalLine, "Señal", color=color.orange)
+plot(k, "%K", color=color.green)
+plot(d, "%D", color=color.red)
+hline(20, "Sobreventa", color=color.gray)
+hline(80, "Sobrecompra", color=color.gray)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.bottom, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.top, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: cruce contrario de MACD ===
+if macdCrossDown
+    strategy.close("Long")
+if macdCrossUp
+    strategy.close("Short")
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia 3", message="MACD + Estocástico: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia 3", message="MACD + Estocástico: señal de VENTA")

@@ -1,0 +1,66 @@
+//@version=5
+// NOTA: commission_value y slippage deben ser constantes (Pine no permite input() aquí).
+// Edita estos dos números directamente si tu bróker tiene otra comisión/slippage típico.
+strategy("Estrategia D - Williams %R + ATR (M15)", overlay=false,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2)
+
+// === Preset de periodos para M15 ===
+presetMode = input.string("Estándar (sin cambio)", "Modo de periodos", options=["Estándar (sin cambio)", "Ventana equivalente"], group="Preset M15")
+wprLen     = presetMode == "Estándar (sin cambio)" ? 14 : 9
+atrLen     = presetMode == "Estándar (sin cambio)" ? 14 : 9
+atrSmaLen  = presetMode == "Estándar (sin cambio)" ? 50 : 33
+
+atrTpMult = input.float(1.5, "Multiplicador ATR para TP", group="Indicadores")
+atrSlMult = input.float(1.0, "Multiplicador ATR para SL", group="Indicadores")
+
+// === Filtro de sesión horaria ===
+sessionInput = input.session("0000-2400", "Sesión de trading (hora del exchange)", group="Filtro de Sesión")
+inSession    = not na(time(timeframe.period, sessionInput))
+
+// === Indicadores ===
+wpr      = ta.wpr(wprLen)
+atrValue = ta.atr(atrLen)
+atrAvg   = ta.sma(atrValue, atrSmaLen)
+
+crossUpFromOversold     = ta.crossover(wpr, -80)
+crossDownFromOverbought = ta.crossunder(wpr, -20)
+
+volatilityOk = atrValue > atrAvg
+
+longCondition  = crossUpFromOversold     and volatilityOk and inSession
+shortCondition = crossDownFromOverbought and volatilityOk and inSession
+
+// === Plots ===
+plot(wpr, "Williams %R", color=color.blue)
+hline(-20, "Sobrecompra", color=color.gray)
+hline(-80, "Sobreventa", color=color.gray)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.bottom, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.top, color=color.red, size=size.small)
+
+// === Niveles de salida fijados al momento de la entrada ===
+var float longTP = na
+var float longSL = na
+var float shortTP = na
+var float shortSL = na
+
+if longCondition
+    strategy.entry("Long", strategy.long)
+    longTP := close + atrValue * atrTpMult
+    longSL := close - atrValue * atrSlMult
+
+if shortCondition
+    strategy.entry("Short", strategy.short)
+    shortTP := close - atrValue * atrTpMult
+    shortSL := close + atrValue * atrSlMult
+
+if strategy.position_size > 0
+    strategy.exit("Salida Long", "Long", limit=longTP, stop=longSL)
+if strategy.position_size < 0
+    strategy.exit("Salida Short", "Short", limit=shortTP, stop=shortSL)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia D", message="Williams %R + ATR: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia D", message="Williams %R + ATR: señal de VENTA")

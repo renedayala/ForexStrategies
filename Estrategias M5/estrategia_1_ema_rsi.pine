@@ -1,0 +1,45 @@
+//@version=5
+strategy("Estrategia 1 - EMA Cross + RSI (M5)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=1)
+
+// === Inputs ===
+emaFastLen    = input.int(9, "EMA Rápida")
+emaSlowLen    = input.int(21, "EMA Lenta")
+rsiLen        = input.int(14, "RSI Periodo")
+rsiUpperLimit = input.int(70, "RSI límite superior (evitar compra tardía)")
+rsiLowerLimit = input.int(30, "RSI límite inferior (evitar venta tardía)")
+
+// === Indicadores ===
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+rsi     = ta.rsi(close, rsiLen)
+
+// === Condiciones ===
+crossUp   = ta.crossover(emaFast, emaSlow)
+crossDown = ta.crossunder(emaFast, emaSlow)
+
+longCondition  = crossUp   and rsi > 50 and rsi < rsiUpperLimit
+shortCondition = crossDown and rsi < 50 and rsi > rsiLowerLimit
+
+// === Plots ===
+plot(emaFast, "EMA 9", color=color.blue)
+plot(emaSlow, "EMA 21", color=color.orange)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas (para backtest en Strategy Tester) ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: cruce contrario cierra posición ===
+if crossDown
+    strategy.close("Long")
+if crossUp
+    strategy.close("Short")
+
+// === Alertas (para confirmación manual) ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia 1", message="EMA Cross + RSI: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia 1", message="EMA Cross + RSI: señal de VENTA")

@@ -1,0 +1,57 @@
+//@version=5
+// NOTA: commission_value y slippage deben ser constantes (Pine no permite input() aquí).
+// Edita estos dos números directamente si tu bróker tiene otra comisión/slippage típico.
+strategy("Estrategia C - Keltner + Awesome Oscillator (M15)", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2)
+
+// === Preset de periodos para M15 ===
+presetMode = input.string("Estándar (sin cambio)", "Modo de periodos", options=["Estándar (sin cambio)", "Ventana equivalente"], group="Preset M15")
+emaLen     = presetMode == "Estándar (sin cambio)" ? 20 : 14
+atrLen     = presetMode == "Estándar (sin cambio)" ? 10 : 7
+atrMult    = input.float(2.0, "Multiplicador ATR Keltner", group="Indicadores")
+
+// === Filtro de sesión horaria ===
+sessionInput = input.session("0000-2400", "Sesión de trading (hora del exchange)", group="Filtro de Sesión")
+inSession    = not na(time(timeframe.period, sessionInput))
+
+// === Keltner Channels ===
+basis    = ta.ema(close, emaLen)
+rangeATR = ta.atr(atrLen)
+upperKC  = basis + rangeATR * atrMult
+lowerKC  = basis - rangeATR * atrMult
+
+// === Awesome Oscillator (periodos clásicos, no dependen del TF) ===
+ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
+
+// === Condiciones ===
+breakUp   = ta.crossover(close, upperKC)
+breakDown = ta.crossunder(close, lowerKC)
+
+longCondition  = breakUp   and ao > 0 and inSession
+shortCondition = breakDown and ao < 0 and inSession
+
+// === Plots ===
+plot(basis, "Keltner Media", color=color.gray)
+plot(upperKC, "Keltner Superior", color=color.red)
+plot(lowerKC, "Keltner Inferior", color=color.green)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: TP en la media, SL en la banda contraria ===
+if strategy.position_size > 0
+    strategy.exit("Salida Long", "Long", limit=basis, stop=lowerKC)
+if strategy.position_size < 0
+    strategy.exit("Salida Short", "Short", limit=basis, stop=upperKC)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia C", message="Keltner + AO: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia C", message="Keltner + AO: señal de VENTA")

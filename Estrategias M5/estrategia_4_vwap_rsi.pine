@@ -1,0 +1,42 @@
+//@version=5
+strategy("Estrategia 4 - VWAP + RSI Reversión Intradía (M5)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=1)
+
+// === Inputs ===
+rsiLen        = input.int(14, "RSI Periodo")
+rsiOversold   = input.int(30, "RSI Sobreventa")
+rsiOverbought = input.int(70, "RSI Sobrecompra")
+devThreshold  = input.float(0.15, "Desviación mínima vs VWAP (%)", step=0.05)
+
+// === Indicadores ===
+vwapValue = ta.vwap(hlc3)
+rsi       = ta.rsi(close, rsiLen)
+
+deviationPct = (close - vwapValue) / vwapValue * 100
+
+farBelowVWAP = deviationPct < -devThreshold
+farAboveVWAP = deviationPct > devThreshold
+
+longCondition  = farBelowVWAP and rsi < rsiOversold
+shortCondition = farAboveVWAP and rsi > rsiOverbought
+
+// === Plots ===
+plot(vwapValue, "VWAP", color=color.purple, linewidth=2)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: TP en el propio VWAP ===
+if strategy.position_size > 0
+    strategy.exit("TP Long", "Long", limit=vwapValue)
+if strategy.position_size < 0
+    strategy.exit("TP Short", "Short", limit=vwapValue)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia 4", message="VWAP + RSI: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia 4", message="VWAP + RSI: señal de VENTA")

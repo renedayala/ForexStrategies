@@ -1,0 +1,50 @@
+//@version=5
+strategy("Estrategia 2 - Bollinger + RSI Reversión (M5)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=1)
+
+// === Inputs ===
+bbLen         = input.int(20, "Bollinger Periodo")
+bbMult        = input.float(2.0, "Bollinger Desviación")
+rsiLen        = input.int(14, "RSI Periodo")
+rsiOversold   = input.int(30, "RSI Sobreventa")
+rsiOverbought = input.int(70, "RSI Sobrecompra")
+
+// === Indicadores ===
+basis   = ta.sma(close, bbLen)
+dev     = bbMult * ta.stdev(close, bbLen)
+upperBB = basis + dev
+lowerBB = basis - dev
+rsi     = ta.rsi(close, rsiLen)
+
+// === Vela de rechazo en el extremo de la banda ===
+touchedLower = low <= lowerBB
+touchedUpper = high >= upperBB
+
+bullishRejection = touchedLower and close > open and close > lowerBB
+bearishRejection = touchedUpper and close < open and close < upperBB
+
+longCondition  = bullishRejection and rsi < rsiOversold
+shortCondition = bearishRejection and rsi > rsiOverbought
+
+// === Plots ===
+plot(basis, "Media 20", color=color.gray)
+plot(upperBB, "Banda Superior", color=color.red)
+plot(lowerBB, "Banda Inferior", color=color.green)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salidas: TP en la media, SL un poco más allá del extremo ===
+if strategy.position_size > 0
+    strategy.exit("Salida Long", "Long", limit=basis, stop=lowerBB - dev * 0.3)
+if strategy.position_size < 0
+    strategy.exit("Salida Short", "Short", limit=basis, stop=upperBB + dev * 0.3)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia 2", message="Bollinger + RSI: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia 2", message="Bollinger + RSI: señal de VENTA")

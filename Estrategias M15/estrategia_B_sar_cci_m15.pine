@@ -1,0 +1,52 @@
+//@version=5
+// NOTA: commission_value y slippage deben ser constantes (Pine no permite input() aquí).
+// Edita estos dos números directamente si tu bróker tiene otra comisión/slippage típico.
+strategy("Estrategia B - Parabolic SAR + CCI (M15)", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2)
+
+// === Preset de periodos para M15 ===
+presetMode = input.string("Estándar (sin cambio)", "Modo de periodos", options=["Estándar (sin cambio)", "Ventana equivalente"], group="Preset M15")
+cciLen     = presetMode == "Estándar (sin cambio)" ? 20 : 14
+
+// SAR no depende de la temporalidad, se deja editable pero sin preset
+sarStart     = input.float(0.02, "SAR Start", group="Indicadores")
+sarIncrement = input.float(0.02, "SAR Increment", group="Indicadores")
+sarMax       = input.float(0.2, "SAR Maximum", group="Indicadores")
+
+// === Filtro de sesión horaria ===
+sessionInput = input.session("0000-2400", "Sesión de trading (hora del exchange)", group="Filtro de Sesión")
+inSession    = not na(time(timeframe.period, sessionInput))
+
+// === Indicadores ===
+sar = ta.sar(sarStart, sarIncrement, sarMax)
+cci = ta.cci(close, cciLen)
+
+sarFlipBull = ta.crossover(close, sar)
+sarFlipBear = ta.crossunder(close, sar)
+
+longCondition  = sarFlipBull and cci > 0 and inSession
+shortCondition = sarFlipBear and cci < 0 and inSession
+
+// === Plots ===
+plot(sar, "Parabolic SAR", color=color.blue, style=plot.style_circles)
+
+plotshape(longCondition, title="Compra", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortCondition, title="Venta", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// === Entradas ===
+if longCondition
+    strategy.entry("Long", strategy.long)
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// === Salida: trailing en el propio SAR ===
+if strategy.position_size > 0
+    strategy.exit("Trail Long", "Long", stop=sar)
+if strategy.position_size < 0
+    strategy.exit("Trail Short", "Short", stop=sar)
+
+// === Alertas ===
+alertcondition(longCondition, title="Señal de Compra - Estrategia B", message="SAR + CCI: señal de COMPRA")
+alertcondition(shortCondition, title="Señal de Venta - Estrategia B", message="SAR + CCI: señal de VENTA")
